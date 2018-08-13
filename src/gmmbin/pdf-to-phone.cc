@@ -28,21 +28,21 @@
 #include "tree/context-dep.h"
 #include "tree/clusterable-classes.h"
 #include "util/text-utils.h"
-
+#include "fst/fstlib.h"
 
 
 
 namespace kaldi {
 
   void pdfToPhone(const std::vector<int32> &pdf_id,
-                  const TransitionModel &trans_model) {
+                  const TransitionModel &trans_model,
+                  const fst::SymbolTable &phones_symtab) {
       std::vector<int32> phones;
       GetPhonesForPdfs(trans_model, pdf_id, &phones);
       std::ostringstream ss;      
       for (int32 idx = 0; idx < phones.size(); idx ++)
-          ss << phones[idx] << ' ';
-      std::cout << "Tree has pdf-id " << pdf_id[0] 
-          << " with corresponding phone list: " << ss.str();
+          ss << phones_symtab.Find(phones[idx]) << ' ';
+      std::cout << pdf_id[0] << " " << ss.str() << '\n';
   }
 
 }
@@ -55,25 +55,33 @@ int main(int argc, char *argv[]) {
   
   const char *usage =
     "Get a list of corresponding phones for a pdf-id in a decision tree\n"
-    "Usage:  pdf-to-phone <pdf-id> <tree-in> <topo-in>\n"
+    "Usage:  pdf-to-phone <pdf-id> <tree-in> <topo-in> <phone-table>\n"
     "e.g.: \n"
-    "  pdf-to-phone 231 tree topo\n";
+    "  pdf-to-phone 231 tree topo phones.txt\n";
   
   
   ParseOptions po(usage);
   po.Read(argc, argv);
   
   std::string
-      pdf_id = po.GetArg(1),     
-      tree_filename = po.GetArg(2),
-      topo_filename = po.GetArg(3);
-    
+    pdf_id = po.GetArg(1),     
+    tree_filename = po.GetArg(2),
+    topo_filename = po.GetArg(3),
+    phones_symtab_filename = po.GetArg(4);
+
   ContextDependency ctx_dep; ReadKaldiObject(tree_filename, &ctx_dep);
   HmmTopology topo; ReadKaldiObject(topo_filename, &topo);
   TransitionModel trans_model(ctx_dep, topo);
 
+  fst::SymbolTable *phones_symtab = NULL;
+  {  // read phone symbol table.
+    std::ifstream is(phones_symtab_filename.c_str());
+      phones_symtab = fst::SymbolTable::ReadText(is, phones_symtab_filename);
+      if (!phones_symtab) KALDI_ERR << "Could not read phones symbol-table file "<<phones_symtab_filename;
+  }
+  
   std::vector<int32> pdf(1, stoi(pdf_id));
     
-  pdfToPhone(pdf, trans_model); 
+  pdfToPhone(pdf, trans_model, *phones_symtab); 
 
 }
